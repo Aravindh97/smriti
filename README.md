@@ -53,10 +53,9 @@ Smriti remembers what users say about themselves, their team and their organisat
 `smriti eval` replays [`testdata/eval/scenario.json`](testdata/eval/scenario.json) into a fresh org namespace. The scenario has 6 users, 4 teams and 17 sessions between January and June 2026. Facts change across the sessions: managers, regions, team tools, review days, the payroll date. There is also a user who tries to overwrite an org fact without permission.
 
 The eval then asks 34 questions:
-- 26 about current values
-- 3 "as of" questions about past values
+- 29 about current values, including facts shared through a team or the org
 - 2 leakage probes: a user asking about another team's tools, or another user's manager
-- 3 more on team and org sharing
+- 3 "as of" questions about past values
 
 The baseline is what an agent without a memory layer does: retrieve the most similar message from the user's own chat history, using the same embedder.
 
