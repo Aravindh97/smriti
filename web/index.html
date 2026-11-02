@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>smriti · agent memory</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .act { font-weight:600 } .act.add{color:var(--ok)} .act.supersede{color:#b7791f} .act.denied{color:var(--bad)} .act.confirm{color:var(--accent)} .act.ignore,.act.duplicate{color:var(--muted)}
+  tr.closed td { color:var(--muted); opacity:.75 } td a { cursor:pointer } .out:empty { display:none }
+</style>
+</head>
+<body>
+<header>
+  <h1>smriti <span>· memory an agent can trust</span></h1>
+  <p>An AI assistant at a garment company, Kaveri, remembers what each person tells it. A changed fact replaces the old one instead of piling up next to it, old answers stay queryable by date, people only see their own, their team's and the company's memories, and only HR can change company-wide facts. The memory layer from the repo runs here as Go WebAssembly.</p>
+  <p><a href="https://github.com/Aravindh97/smriti">Source and README</a> (the full version stores memories in Postgres with pgvector; this page keeps them in memory with the same rules. The facts are pulled out by the repo's rule-based extractor; the README covers the LLM extractor.)</p>
+</header>
+<main class="loading">
+  <section class="card">
+    <h2><b>1</b> · Talk to the assistant</h2>
+    <div class="row">as <select id="user"></select> <span class="muted" id="who"></span></div>
+    <div class="row"><input id="say" style="flex:1" value="My manager is Kavya Iyer now."><button id="sayb">Send</button></div>
+    <div class="muted">Try: "I prefer Tamil for voice calls." · "Our team uses Canva for mockups." · "The company's leave policy is 30 days." (only meena, in HR, may change company facts) · "I am travelling to Delhi this week."</div>
+    <pre class="out" id="said"></pre>
+  </section>
+  <section class="card">
+    <h2><b>2</b> · What would the agent recall?</h2>
+    <div class="row"><input id="q" style="flex:1" value="who is my manager"> as of <input id="asof" type="date" value=""><button id="recb">Recall</button></div>
+    <div class="muted">Leave the date empty for "now" (the demo clock starts on the scenario's last day). Try as of 2026-03-01 for anita: her manager then was Priya.</div>
+    <table id="rec"></table>
+  </section>
+  <section class="card wide">
+    <h2><b>3</b> · Memories <span id="uname"></span> can see</h2>
+    <div class="row"><button class="ghost" id="replay">Replay every past conversation again</button><button class="ghost" id="reset">Reset</button> <span id="replayout" class="muted"></span></div>
+    <table id="mem"></table>
+    <div id="hist"></div>
+  </section>
+  <section class="card wide">
+    <h2><b>4</b> · Eval: memory vs searching raw chat history</h2>
+    <div class="row"><button id="evalb">Run the eval</button> <span class="muted">34 questions whose answers changed over time, asked as different users; the baseline returns the most similar past message from that user's own history.</span></div>
+    <div class="stats" id="estats"></div>
+    <table id="erows"></table>
+  </section>
+</main>
+<footer>Embeddings are a 384-dimension hashing embedder, so the demo needs no model download. Message times come from the scenario; each message you send moves the demo clock forward an hour.</footer>
+<script src="wasm_exec.js"></script><script src="gowasm.js"></script>
+<script>
+let users = [];
+const user = () => $("user").value;
+function memTable(rows) {
+  $("uname").textContent = user();
+  $("mem").innerHTML = "<tr><th>Scope</th><th>Subject</th><th>Content</th><th class=num>Seen</th><th>Valid (greyed = replaced)</th><th>Source</th><th></th></tr>" + rows.map(m =>
+    `<tr class="${m.Current ? "" : "closed"}"><td>${m.Scope}${m.Scope === "team" ? " · " + esc(m.Owner) : ""}</td><td><a data-s="${esc(m.Subject)}">${esc(m.Subject)}</a></td><td>${esc(m.Content)}</td><td class=num>${m.Confirmations}</td>
+     <td class=muted>${m.From}${m.To ? " → " + m.To : " → now"}</td><td class="mono muted">${esc(m.Source)}</td><td>${m.Current && m.Scope === "user" && m.Owner === user() ? `<a data-f="${m.ID}">forget</a>` : ""}</td></tr>`).join("");
+  $("mem").querySelectorAll("a[data-s]").forEach(a => a.onclick = async () => {
+    const h = await api("GET", `history?user=${user()}&subject=${encodeURIComponent(a.dataset.s)}`);
+    $("hist").innerHTML = `<h2 style="margin-top:10px">History of ${esc(a.dataset.s)}</h2><table>` + h.map(m => `<tr><td class=muted>${m.From} → ${m.To || "now"}</td><td>${esc(m.Content)}</td><td class="mono muted">${esc(m.Source)}</td></tr>`).join("") + "</table>";
+  });
+  $("mem").querySelectorAll("a[data-f]").forEach(a => a.onclick = async () => {
+    const r = await api("POST", "forget", {User: user(), ID: a.dataset.f});
+    $("said").textContent = `forgot ${r.deleted_versions} version(s); they are deleted, not just hidden`; memTable(r.memories);
+  });
+}
+async function pick() {
+  const u = users.find(x => x.id === user());
+  $("who").textContent = `teams: ${u.teams.join(", ")}${u.org_writer ? " · may write company facts" : ""}`;
+  $("hist").innerHTML = "";
+  memTable(await api("GET", "memories?user=" + user()));
+}
+$("user").onchange = pick;
+$("sayb").onclick = () => run($("sayb"), async () => {
+  const r = await api("POST", "say", {User: user(), Text: $("say").value});
+  $("said").innerHTML = (r.results.length ? r.results.map(w => `<span class="act ${w.action}">${w.action}</span> ${esc(w.candidate.scope)} · ${esc(w.candidate.subject)}: ${esc(w.candidate.content)} <span class=muted>(${esc(w.reason)})</span>`).join("\n")
+    : "no fact found in that message") + (r.results.length ? `\n<span class=muted>sent again as a retried webhook: ${r.retry_duplicates} of ${r.results.length} recognised as already processed</span>` : "");
+  memTable(r.memories);
+});
+$("recb").onclick = () => run($("recb"), async () => {
+  const r = await api("POST", "recall", {User: user(), Query: $("q").value, AsOf: $("asof").value});
+  $("rec").innerHTML = "<tr><th>#</th><th>Memory</th><th class=num>Similarity</th><th class=num>Score</th></tr>" + (r || []).map((x, i) =>
+    `<tr><td>${i + 1}</td><td>${esc(x.memory.Content)} <div class=muted>${x.memory.Scope} · ${x.memory.From} → ${x.memory.To || "now"}</div></td><td class=num>${x.similarity.toFixed(3)}</td><td class=num>${x.score.toFixed(3)}</td></tr>`).join("");
+});
+$("replay").onclick = () => run($("replay"), async () => {
+  const r = await api("POST", "replay");
+  $("replayout").textContent = `${Object.entries(r.actions).map(([k, v]) => v + " " + k).join(", ")}: ${r.changed} memories changed`;
+  pick();
+});
+$("reset").onclick = async () => { await api("POST", "reset"); $("said").textContent = ""; $("replayout").textContent = ""; pick(); };
+$("evalb").onclick = () => run($("evalb"), async () => {
+  const e = await api("POST", "eval"), n = e.Questions;
+  $("estats").innerHTML = `<div><div class="big ok">${(e.SmritiCorrect / n).toFixed(3)}</div>smriti correct</div><div><div class="big">${(e.SmritiStale / n).toFixed(3)}</div>smriti stale</div>
+    <div><div class="big">${(e.BaseCorrect / n).toFixed(3)}</div>raw history correct</div><div><div class="big bad">${(e.BaseStale / n).toFixed(3)}</div>raw history stale</div>
+    <div><div class="big">${e.Leaks}</div>leaks to the wrong user</div><div><div class="big">${e.ReplayChanged}</div>rows changed by replaying all sessions</div>`;
+  const m = (ok, st) => st ? '<b class=bad>stale</b>' : ok ? '<span class=ok>ok</span>' : '<b class=bad>miss</b>';
+  $("erows").innerHTML = "<tr><th>User</th><th>Question</th><th>smriti</th><th>raw history</th></tr>" + e.Rows.map(r =>
+    `<tr><td>${r.User}</td><td>${esc(r.Query)}</td><td>${m(r.SmritiOK, r.SmritiStale)} <span class=muted>${esc(r.Smriti || "(nothing)")}</span></td><td>${m(r.BaselineOK, r.BaseStale)} <span class=muted>${esc(r.Baseline)}</span></td></tr>`).join("");
+});
+api("GET", "users").then(r => { users = r.users; $("user").innerHTML = users.map(u => `<option>${u.id}</option>`).join(""); pick(); });
+</script>
+</body>
+</html>

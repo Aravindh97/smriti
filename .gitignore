@@ -1,3 +1,5 @@
 .env
 *.log
 /smriti
+dist/
+cmd/web/embed/
