@@ -1,0 +1,2 @@
+.act { font-weight:600 } .act.add{color:var(--ok)} .act.supersede{color:#b7791f} .act.denied{color:var(--bad)} .act.confirm{color:var(--go)} .act.ignore,.act.duplicate{color:var(--mute)}
+tr.closed td { color:var(--mute); opacity:.75 }

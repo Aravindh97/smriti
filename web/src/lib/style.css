@@ -27,3 +27,12 @@ pre.out { background:#0f1720; color:#d6e2e8; border-radius:8px; padding:10px; wh
 .loading { opacity:.5; pointer-events:none }
 footer { max-width:1150px; margin:auto; padding:0 20px 30px; color:var(--mute); font-size:12px }
 @media (max-width:860px) { main { grid-template-columns:1fr } }
+nav.top { max-width:1150px; margin:auto; padding:12px 20px 0; display:flex; justify-content:space-between; font-size:13px }
+nav.top a { color:var(--mute); text-decoration:none } nav.top a:hover { color:var(--go) }
+#root > main { margin-top:4px }
+.gate { min-height:60vh; display:flex; gap:12px; align-items:center; justify-content:center; color:var(--mute) }
+.spinner { width:18px; height:18px; border:3px solid var(--line); border-top-color:var(--go); border-radius:50%; animation:spin .8s linear infinite }
+@keyframes spin { to { transform:rotate(360deg) } }
+.error { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#fff; border:1px solid var(--bad); color:var(--bad); border-radius:8px; padding:8px 12px; box-shadow:0 4px 16px #0002; display:flex; gap:12px; align-items:center; z-index:10 }
+button.small { padding:3px 8px; font-size:12px }
+footer div { margin-top:4px }

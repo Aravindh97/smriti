@@ -3,3 +3,6 @@
 /smriti
 dist/
 cmd/web/embed/
+web/node_modules/
+web/public/app.wasm
+web/public/wasm_exec.js
